@@ -8,11 +8,10 @@ namespace PixelForge
         static readonly Color Background = new Color(0.035f, 0.055f, 0.11f);
         static readonly Color Cyan = new Color(0.18f, 0.92f, 0.94f);
         static readonly Color Pink = new Color(1f, 0.28f, 0.52f);
-
+        static Sprite sharedSprite;
         Camera cam;
         Transform player;
-        Text scoreText;
-        Text hintText;
+        Text scoreText, hintText;
         int score;
         float spawnTimer;
         bool ended;
@@ -35,8 +34,9 @@ namespace PixelForge
             var playerObj = MakeShape("Explorer", new Vector2(0, -3.45f), new Vector2(.72f, .72f), Cyan);
             player = playerObj.transform;
             playerObj.AddComponent<CircleCollider2D>().isTrigger = true;
-            var relay = playerObj.AddComponent<PlayerCollisionRelay>();
-            relay.Owner = this;
+            playerObj.AddComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+            playerObj.GetComponent<Rigidbody2D>().gravityScale = 0;
+            playerObj.AddComponent<PlayerCollisionRelay>().Owner = this;
 
             MakeShape("Left boundary", new Vector2(-3.35f, 0), new Vector2(.08f, 10f), new Color(.12f,.2f,.34f));
             MakeShape("Right boundary", new Vector2(3.35f, 0), new Vector2(.08f, 10f), new Color(.12f,.2f,.34f));
@@ -64,7 +64,14 @@ namespace PixelForge
 
         Sprite RuntimeSprite()
         {
-            return Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            if (sharedSprite == null)
+            {
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                texture.SetPixels(new[] { Color.white, Color.white, Color.white, Color.white });
+                texture.Apply();
+                sharedSprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), new Vector2(.5f, .5f), 2);
+            }
+            return sharedSprite;
         }
 
         Text MakeText(Transform parent, string value, int size, Vector2 anchor, Vector2 offset, Color color)
@@ -77,7 +84,7 @@ namespace PixelForge
             rect.anchoredPosition = offset;
             var text = go.GetComponent<Text>();
             text.text = value;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = size;
             text.alignment = TextAnchor.MiddleCenter;
             text.color = color;
@@ -92,7 +99,6 @@ namespace PixelForge
                     UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
                 return;
             }
-
             MovePlayer();
             spawnTimer -= Time.deltaTime;
             if (spawnTimer <= 0)
@@ -100,7 +106,6 @@ namespace PixelForge
                 SpawnFallingObject();
                 spawnTimer = Random.Range(.45f, .9f);
             }
-
             foreach (var item in FindObjectsByType<FallingObject>(FindObjectsSortMode.None))
             {
                 item.transform.Translate(Vector3.down * item.Speed * Time.deltaTime, Space.World);
@@ -112,16 +117,8 @@ namespace PixelForge
         {
             Vector3 world = Vector3.zero;
             bool hasPointer = false;
-            if (Input.touchCount > 0)
-            {
-                world = cam.ScreenToWorldPoint(Input.GetTouch(0).position);
-                hasPointer = true;
-            }
-            else if (Input.GetMouseButton(0))
-            {
-                world = cam.ScreenToWorldPoint(Input.mousePosition);
-                hasPointer = true;
-            }
+            if (Input.touchCount > 0) { world = cam.ScreenToWorldPoint(Input.GetTouch(0).position); hasPointer = true; }
+            else if (Input.GetMouseButton(0)) { world = cam.ScreenToWorldPoint(Input.mousePosition); hasPointer = true; }
             if (hasPointer)
             {
                 var targetX = Mathf.Clamp(world.x, -2.8f, 2.8f);
@@ -132,11 +129,12 @@ namespace PixelForge
         void SpawnFallingObject()
         {
             bool hazard = Random.value < .3f;
-            var go = MakeShape(hazard ? "Hazard" : "Shard",
-                new Vector2(Random.Range(-2.75f, 2.75f), 6f),
-                hazard ? new Vector2(.58f,.58f) : new Vector2(.34f,.34f),
-                hazard ? Pink : Cyan);
+            var go = MakeShape(hazard ? "Hazard" : "Shard", new Vector2(Random.Range(-2.75f, 2.75f), 6f),
+                hazard ? new Vector2(.58f,.58f) : new Vector2(.34f,.34f), hazard ? Pink : Cyan);
             go.AddComponent<CircleCollider2D>().isTrigger = true;
+            var body = go.AddComponent<Rigidbody2D>();
+            body.bodyType = RigidbodyType2D.Kinematic;
+            body.gravityScale = 0;
             var falling = go.AddComponent<FallingObject>();
             falling.Speed = Random.Range(2.7f, 4.4f) + score * .025f;
             falling.Hazard = hazard;
@@ -146,18 +144,8 @@ namespace PixelForge
         {
             var falling = other.GetComponent<FallingObject>();
             if (falling == null || ended) return;
-            if (falling.Hazard)
-            {
-                ended = true;
-                hintText.text = "OOPS! TAP TO PLAY AGAIN";
-                hintText.color = Pink;
-            }
-            else
-            {
-                score++;
-                scoreText.text = "SHARDS  " + score;
-                Destroy(other.gameObject);
-            }
+            if (falling.Hazard) { ended = true; hintText.text = "OOPS! TAP TO PLAY AGAIN"; hintText.color = Pink; }
+            else { score++; scoreText.text = "SHARDS  " + score; Destroy(other.gameObject); }
         }
     }
 
