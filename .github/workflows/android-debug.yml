@@ -1,0 +1,44 @@
+name: Android Debug APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with Unity
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          PIXELFORGE_APK_PATH: Build/PixelForge2D-debug.apk
+        with:
+          projectPath: .
+          unityVersion: 6000.0.60f1
+          targetPlatform: Android
+          buildMethod: PixelForge.Editor.BuildAndroid.Build
+          androidAppBundle: false
+          allowDirtyBuild: true
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge2D-debug-apk
+          path: Build/PixelForge2D-debug.apk
+          if-no-files-found: error
+          retention-days: 7
