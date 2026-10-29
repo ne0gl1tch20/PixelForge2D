@@ -1,0 +1,57 @@
+name: Android Debug APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android debug APK
+    # Unity Personal is activated through Unity Hub on this machine.
+    # Keep the runner on the same Windows user that owns the Unity Personal license.
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Locate Unity 6000.0.60f1
+        shell: powershell
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.60f1\Editor\Unity.exe"
+          if (-not (Test-Path $unity)) {
+            throw "Unity 6000.0.60f1 was not found at $unity. Update the workflow path to the Editor location shown by Unity Hub."
+          }
+          "UNITY_EDITOR=$unity" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build Android debug APK with Unity IL2CPP
+        shell: powershell
+        env:
+          PIXELFORGE_APK_PATH: Build\PixelForge2D-debug.apk
+        run: |
+          & $env:UNITY_EDITOR `
+            -quit `
+            -batchmode `
+            -nographics `
+            -projectPath "$env:GITHUB_WORKSPACE" `
+            -buildTarget Android `
+            -executeMethod PixelForge.Editor.BuildAndroid.Build `
+            -logFile -
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unity Android build failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge2D-debug-apk
+          path: Build/PixelForge2D-debug.apk
+          if-no-files-found: error
+          retention-days: 7
